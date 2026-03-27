@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — Fraud Analyser</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+</head>
+<body class="login-page">
+  <div class="login-container" style="width:480px;">
+    <div class="login-logo">
+      <div class="logo-icon">FA</div>
+      <h1>Create Account</h1>
+      <p>Fraud Transaction Analyser</p>
+    </div>
+
+    {% if errors.general %}
+    <div class="alert alert-danger">{{ errors.general }}</div>
+    {% endif %}
+
+    <form method="POST" action="{{ url_for('register') }}" novalidate>
+
+      <div class="form-group">
+        <label>Full Name</label>
+        <input type="text" name="full_name"
+               value="{{ form.get('full_name','') }}"
+               placeholder="e.g. M Likhitha"
+               class="{{ 'input-error' if errors.get('full_name') }}"/>
+        {% if errors.get('full_name') %}
+        <span class="field-error">{{ errors.full_name }}</span>
+        {% endif %}
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username"
+                 value="{{ form.get('username','') }}"
+                 placeholder="e.g. likhitha23"
+                 class="{{ 'input-error' if errors.get('username') }}"/>
+          {% if errors.get('username') %}
+          <span class="field-error">{{ errors.username }}</span>
+          {% endif %}
+        </div>
+        <div class="form-group">
+          <label>Email Address</label>
+          <input type="email" name="email"
+                 value="{{ form.get('email','') }}"
+                 placeholder="e.g. likhitha@email.com"
+                 class="{{ 'input-error' if errors.get('email') }}"/>
+          {% if errors.get('email') %}
+          <span class="field-error">{{ errors.email }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password"
+                 placeholder="Min 6 characters"
+                 class="{{ 'input-error' if errors.get('password') }}"/>
+          {% if errors.get('password') %}
+          <span class="field-error">{{ errors.password }}</span>
+          {% endif %}
+        </div>
+        <div class="form-group">
+          <label>Confirm Password</label>
+          <input type="password" name="confirm"
+                 placeholder="Re-enter password"
+                 class="{{ 'input-error' if errors.get('confirm') }}"/>
+          {% if errors.get('confirm') %}
+          <span class="field-error">{{ errors.confirm }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Password strength bar -->
+      <div class="form-group">
+        <div class="strength-wrap">
+          <div class="strength-bar" id="strengthBar"></div>
+        </div>
+        <span class="strength-label" id="strengthLabel"></span>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+    </form>
+
+    <p style="text-align:center;margin-top:18px;font-size:13px;color:#888;">
+      Already have an account?
+      <a href="{{ url_for('login') }}" style="color:#0d6efd;font-weight:600;">Login here</a>
+    </p>
+  </div>
+
+<script>
+const pwInput  = document.querySelector('input[name="password"]');
+const bar      = document.getElementById('strengthBar');
+const label    = document.getElementById('strengthLabel');
+
+pwInput.addEventListener('input', () => {
+  const val = pwInput.value;
+  let score = 0;
+  if (val.length >= 6)  score++;
+  if (val.length >= 10) score++;
+  if (/[A-Z]/.test(val)) score++;
+  if (/[0-9]/.test(val)) score++;
+  if (/[^A-Za-z0-9]/.test(val)) score++;
+
+  const levels = [
+    { w:'0%',   color:'#eee',     text:'' },
+    { w:'25%',  color:'#dc3545',  text:'Weak' },
+    { w:'50%',  color:'#fd7e14',  text:'Fair' },
+    { w:'75%',  color:'#ffc107',  text:'Good' },
+    { w:'100%', color:'#28a745',  text:'Strong' },
+  ];
+  const lvl = levels[Math.min(score, 4)];
+  bar.style.width      = lvl.w;
+  bar.style.background = lvl.color;
+  label.textContent    = lvl.text;
+  label.style.color    = lvl.color;
+});
+</script>
+</body>
+</html>

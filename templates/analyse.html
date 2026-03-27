@@ -1,0 +1,340 @@
+{% extends "base.html" %}
+{% block title %}Analyse Transaction{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Analyse a Transaction</h2>
+  <p style="color:#888;font-size:13px;">Enter transaction details to get a real-time fraud risk score</p>
+</div>
+
+<div class="analyse-grid">
+
+  <!-- ── FORM ─────────────────────────────────────── -->
+  <div class="form-card">
+    <h3>Transaction Details</h3>
+    <form method="POST" action="{{ url_for('analyse') }}" id="analyseForm">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Amount (₹) <span class="required">*</span></label>
+          <input type="number" name="amount" id="amountInput"
+                 step="0.01" placeholder="e.g. 5000" required
+                 value="{{ request.form.get('amount','') }}"/>
+          <span class="field-hint" id="amountHint"></span>
+        </div>
+        <div class="form-group">
+          <label>User Average Amount (₹)</label>
+          <input type="number" name="avg_user_amount" id="avgInput"
+                 value="{{ request.form.get('avg_user_amount','1000') }}"/>
+          <span class="field-hint">User normal spending level</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Merchant Name</label>
+        <input type="text" name="merchant"
+               value="{{ request.form.get('merchant','') }}"
+               placeholder="e.g. Amazon, Flipkart, Unknown_Merchant"/>
+      </div>
+
+      <div class="form-group">
+        <label>Transaction Location</label>
+        <div class="location-wrap">
+          <select name="location" id="locationSelect" onchange="updateLocationBadge()">
+            <optgroup label="Domestic — India">
+              <option>Hyderabad</option><option>Mumbai</option><option>Delhi</option>
+              <option>Bangalore</option><option>Chennai</option><option>Kolkata</option>
+              <option>Pune</option><option>Ahmedabad</option><option>Jaipur</option>
+            </optgroup>
+            <optgroup label="International — Medium Risk">
+              <option>Dubai</option><option>Singapore</option><option>London</option>
+              <option>USA</option><option>Malaysia</option><option>Thailand</option>
+              <option>Hong Kong</option><option>Canada</option><option>Australia</option>
+            </optgroup>
+            <optgroup label="International — Low Risk">
+              <option>Germany</option><option>France</option><option>Japan</option>
+              <option>South Korea</option><option>Netherlands</option>
+            </optgroup>
+            <optgroup label="High Risk">
+              <option>Unknown_Location</option>
+            </optgroup>
+          </select>
+          <span class="location-badge" id="locationBadge">Domestic</span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Device</label>
+          <select name="device">
+            <option>Android</option><option>iOS</option>
+            <option>Windows</option><option>MacOS</option><option>Linux</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Payment Method</label>
+          <select name="payment_method">
+            <option>UPI</option><option>Credit Card</option>
+            <option>Debit Card</option><option>Net Banking</option><option>Wallet</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Hour of Day (0–23)</label>
+          <input type="number" name="hour_of_day" id="hourInput"
+                 min="0" max="23"
+                 value="{{ request.form.get('hour_of_day','14') }}"
+                 oninput="updateHourHint(this.value)"/>
+          <span class="field-hint" id="hourHint">Afternoon — normal</span>
+        </div>
+        <div class="form-group">
+          <label>Transaction Velocity (per hr)</label>
+          <input type="number" name="txn_velocity" id="velInput"
+                 min="1" max="20"
+                 value="{{ request.form.get('txn_velocity','1') }}"
+                 oninput="updateVelHint(this.value)"/>
+          <span class="field-hint" id="velHint">Normal</span>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Failed Attempts</label>
+          <input type="number" name="failed_attempts" min="0" max="10"
+                 value="{{ request.form.get('failed_attempts','0') }}"/>
+        </div>
+        <div class="form-group">
+          <label>Account Age (days)</label>
+          <input type="number" name="account_age_days"
+                 value="{{ request.form.get('account_age_days','365') }}"
+                 oninput="updateAgeHint(this.value)"/>
+          <span class="field-hint" id="ageHint"></span>
+        </div>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="is_unusual_device" value="1"
+                 {% if request.form.get('is_unusual_device') %}checked{% endif %}/>
+          <span>Transaction from a new / unrecognised device</span>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-block">Analyse Risk Now</button>
+    </form>
+  </div>
+
+  <!-- ── RESULT ────────────────────────────────────── -->
+  {% if result %}
+  <div class="result-card">
+    <h3>Risk Analysis Result</h3>
+
+    <div class="result-score-wrap">
+      <div class="score-circle score-{{ result.risk.risk_level | lower }}">
+        <span class="score-number">{{ result.risk.risk_score }}</span>
+        <span class="score-label">/ 100</span>
+      </div>
+      <div class="score-meta">
+        <span class="badge badge-{{ result.risk.risk_level | lower }} badge-lg">{{ result.risk.risk_level }}</span>
+        <div class="action-tag-lg">{{ result.risk.recommended_action }}</div>
+        <div class="ml-prob">
+          ML Fraud Probability: <strong>{{ (result.ml.fraud_probability * 100) | round(1) }}%</strong>
+          <span class="confidence-tag">{{ result.ml.confidence }} confidence</span>
+        </div>
+      </div>
+    </div>
+
+    <h4>Score Breakdown</h4>
+    <div class="breakdown-list">
+      {% set bd = result.risk.score_breakdown %}
+      {% for label, val, max_val in [
+        ('Location Risk',   bd.get('location',0),  17),
+        ('Amount Risk',     bd.get('amount',0),    30),
+        ('Velocity',        bd.get('velocity',0),  18),
+        ('Failed Attempts', bd.get('failed',0),    15),
+        ('Device Risk',     bd.get('device',0),     8),
+        ('Odd Hour',        bd.get('hour',0),       7),
+        ('Account Age',     bd.get('account',0),    5),
+      ] %}
+      <div class="breakdown-row">
+        <span class="breakdown-label">{{ label }}</span>
+        <div class="breakdown-bar-wrap">
+          <div class="breakdown-bar"
+            style="width:{{ [((val / max_val) * 100)|int, 100]|min }}%;
+            background:{% if (val/max_val) > 0.7 %}#dc3545
+            {% elif (val/max_val) > 0.4 %}#fd7e14
+            {% elif (val/max_val) > 0 %}#ffc107
+            {% else %}#e9ecef{% endif %};">
+          </div>
+        </div>
+        <span class="breakdown-val">{{ val }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <h4>Why this score?</h4>
+    <ul class="risk-factors">
+      {% for f in result.risk.risk_factors %}
+      <li>{{ f }}</li>
+      {% endfor %}
+    </ul>
+
+    <h4>Alert to be sent</h4>
+    <div class="alert-box sms-box">{{ result.alert.sms_message }}</div>
+  </div>
+
+  {% else %}
+  <div class="result-card result-placeholder">
+    <div class="placeholder-icon">?</div>
+    <p>Fill the form and click <strong>Analyse Risk Now</strong> to see the fraud risk score and breakdown.</p>
+    <div class="placeholder-hints">
+      <div class="hint-item"><span class="hint-dot dot-green"></span>Domestic location = lower risk</div>
+      <div class="hint-item"><span class="hint-dot dot-orange"></span>International = medium/high risk</div>
+      <div class="hint-item"><span class="hint-dot dot-red"></span>Unknown location = critical risk</div>
+      <div class="hint-item"><span class="hint-dot dot-red"></span>Amount 5x+ above average = high risk</div>
+      <div class="hint-item"><span class="hint-dot dot-orange"></span>Midnight transactions = higher risk</div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── DATATABLES: Recent Analysed Transactions ── -->
+<div class="table-card" style="margin-top:32px;">
+  <div class="table-header">
+    <h3>Recently Analysed Transactions</h3>
+    <a href="{{ url_for('transactions') }}" class="btn btn-sm">View All</a>
+  </div>
+  <table id="recentTable" class="display" style="width:100%">
+    <thead>
+      <tr>
+        <th>Transaction ID</th><th>Timestamp</th><th>Amount</th>
+        <th>Merchant</th><th>Location</th><th>Device</th>
+        <th>Risk Score</th><th>Risk Level</th><th>Action</th><th>Fraud</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for txn in recent_txns %}
+      <tr>
+        <td><a href="{{ url_for('transaction_detail', txn_id=txn.transaction_id) }}">{{ txn.transaction_id }}</a></td>
+        <td>{{ txn.get('timestamp','') }}</td>
+        <td>₹{{ "%.2f"|format(txn.amount|float) }}</td>
+        <td>{{ txn.get('merchant','') }}</td>
+        <td>{{ txn.get('location','') }}</td>
+        <td>{{ txn.get('device','') }}</td>
+        <td>{{ txn.get('risk_score',0) }}</td>
+        <td><span class="badge badge-{{ txn.get('risk_level','LOW')|lower }}">{{ txn.get('risk_level','LOW') }}</span></td>
+        <td>{{ txn.get('recommended_action','APPROVE') }}</td>
+        <td>{% if txn.get('is_fraud')==1 %}<span class="badge badge-critical">Yes</span>{% else %}<span class="badge badge-low">No</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt@2/css/dataTables.dataTables.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net@2/js/dataTables.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  new DataTable('#recentTable', {
+    pageLength: 10,
+    order: [[0,'desc']],
+    language: { search: "Search:" }
+  });
+  updateLocationBadge();
+  updateHourHint(document.getElementById('hourInput').value);
+  updateVelHint(document.getElementById('velInput').value);
+
+  const amtInput = document.getElementById('amountInput');
+  const avgInput = document.getElementById('avgInput');
+  function updateAmountHint() {
+    const amt = parseFloat(amtInput.value)||0, avg = parseFloat(avgInput.value)||1000;
+    const hint = document.getElementById('amountHint');
+    const dev = amt / avg;
+    if (!amt) { hint.textContent=''; return; }
+    if (dev>=20)      { hint.textContent=`${dev.toFixed(0)}x your average — CRITICAL`; hint.className='field-hint hint-critical'; }
+    else if (dev>=10) { hint.textContent=`${dev.toFixed(0)}x your average — HIGH`;     hint.className='field-hint hint-high'; }
+    else if (dev>=5)  { hint.textContent=`${dev.toFixed(1)}x your average — MEDIUM`;   hint.className='field-hint hint-medium'; }
+    else if (dev>=3)  { hint.textContent=`${dev.toFixed(1)}x average — slightly high`; hint.className='field-hint hint-warn'; }
+    else              { hint.textContent=`${dev.toFixed(1)}x average — normal`;         hint.className='field-hint hint-ok'; }
+  }
+  amtInput.addEventListener('input', updateAmountHint);
+  avgInput.addEventListener('input', updateAmountHint);
+  updateAmountHint();
+});
+
+function updateLocationBadge() {
+  const val = document.getElementById('locationSelect').value;
+  const badge = document.getElementById('locationBadge');
+  const domestic = ["Hyderabad","Mumbai","Delhi","Bangalore","Chennai","Kolkata","Pune","Ahmedabad","Jaipur"];
+  const medRisk  = ["Dubai","Singapore","London","USA","Malaysia","Thailand","Hong Kong","Canada","Australia"];
+  const lowRisk  = ["Germany","France","Japan","South Korea","Netherlands"];
+  if (domestic.includes(val))    { badge.textContent='Domestic';                    badge.className='location-badge badge-domestic'; }
+  else if (lowRisk.includes(val)){ badge.textContent='International — Low Risk';    badge.className='location-badge badge-intl-low'; }
+  else if (medRisk.includes(val)){ badge.textContent='International — Medium Risk'; badge.className='location-badge badge-intl-med'; }
+  else                           { badge.textContent='High Risk / Unknown';          badge.className='location-badge badge-intl-high'; }
+}
+
+function updateHourHint(val) {
+  const h = parseInt(val), hint = document.getElementById('hourHint');
+  if (h>=0 && h<=4)    { hint.textContent='Late night — HIGH risk';  hint.className='field-hint hint-high'; }
+  else if (h>=23)      { hint.textContent='Night — elevated risk';   hint.className='field-hint hint-medium'; }
+  else if (h>=6&&h<=22){ hint.textContent='Normal hours — safe';     hint.className='field-hint hint-ok'; }
+  else                 { hint.textContent='Early morning';            hint.className='field-hint hint-warn'; }
+}
+
+function updateVelHint(val) {
+  const v = parseInt(val), hint = document.getElementById('velHint');
+  if (v>=15)      { hint.textContent=`${v} txns/hr — card testing suspected`; hint.className='field-hint hint-critical'; }
+  else if (v>=8)  { hint.textContent=`${v} txns/hr — suspicious`;             hint.className='field-hint hint-high'; }
+  else if (v>=5)  { hint.textContent=`${v} txns/hr — moderately high`;        hint.className='field-hint hint-medium'; }
+  else            { hint.textContent=`${v} txn/hr — normal`;                   hint.className='field-hint hint-ok'; }
+}
+
+function updateAgeHint(val) {
+  const d = parseInt(val), hint = document.getElementById('ageHint');
+  if (d<7)       { hint.textContent='Very new — HIGH risk'; hint.className='field-hint hint-high'; }
+  else if (d<30) { hint.textContent='New account — elevated risk'; hint.className='field-hint hint-medium'; }
+  else           { hint.textContent='Established account'; hint.className='field-hint hint-ok'; }
+}
+</script>
+
+<style>
+.location-wrap { display:flex; gap:10px; align-items:center; }
+.location-wrap select { flex:1; }
+.location-badge { padding:4px 10px; border-radius:12px; font-size:11px; font-weight:700; white-space:nowrap; }
+.badge-domestic  { background:#d4edda; color:#155724; }
+.badge-intl-low  { background:#d1ecf1; color:#0c5460; }
+.badge-intl-med  { background:#fff3cd; color:#856404; }
+.badge-intl-high { background:#f8d7da; color:#721c24; }
+.field-hint    { font-size:11px; margin-top:4px; display:block; font-weight:600; }
+.hint-ok       { color:#28a745; } .hint-warn    { color:#fd7e14; }
+.hint-medium   { color:#e6a817; } .hint-high    { color:#dc3545; }
+.hint-critical { color:#a71d2a; }
+.breakdown-list { display:flex; flex-direction:column; gap:8px; margin-bottom:16px; }
+.breakdown-row  { display:flex; align-items:center; gap:8px; }
+.breakdown-label{ font-size:12px; color:#555; width:130px; flex-shrink:0; }
+.breakdown-bar-wrap { flex:1; background:#f0f2f5; border-radius:4px; height:10px; overflow:hidden; }
+.breakdown-bar  { height:100%; border-radius:4px; min-width:2px; }
+.breakdown-val  { font-size:12px; font-weight:700; color:#333; width:28px; text-align:right; }
+.confidence-tag { font-size:11px; background:#e9ecef; color:#555; padding:2px 7px; border-radius:8px; margin-left:6px; }
+.result-placeholder { display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; min-height:300px; color:#888; }
+.placeholder-icon { font-size:56px; color:#dee2e6; margin-bottom:16px; }
+.placeholder-hints { margin-top:20px; text-align:left; display:flex; flex-direction:column; gap:8px; }
+.hint-item { display:flex; align-items:center; gap:8px; font-size:13px; color:#666; }
+.hint-dot  { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.dot-green{background:#28a745;}.dot-orange{background:#fd7e14;}.dot-red{background:#dc3545;}
+.score-meta { display:flex; flex-direction:column; gap:6px; }
+.checkbox-group { margin:8px 0 16px; }
+.checkbox-label { display:flex; align-items:center; gap:10px; cursor:pointer; font-size:13px; color:#444; }
+.checkbox-label input { width:16px; height:16px; cursor:pointer; flex-shrink:0; }
+.required { color:#dc3545; }
+.dataTables_wrapper { font-size:13px; }
+.dataTables_filter input { border:1px solid #ddd; border-radius:8px; padding:6px 10px; margin-left:6px; }
+.dataTables_length select { border:1px solid #ddd; border-radius:6px; padding:4px 8px; }
+</style>
+{% endblock %}

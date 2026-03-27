@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Fraud Analyser{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>Fraud Detection Dashboard</h2>
+  <span class="badge badge-live">Live</span>
+</div>
+
+<!-- Stats cards -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Transactions</div>
+    <div class="stat-value">{{ stats.total | int }}</div>
+  </div>
+  <div class="stat-card critical">
+    <div class="stat-label">Critical Risk</div>
+    <div class="stat-value">{{ stats.critical }}</div>
+    <div class="stat-sub">Blocked</div>
+  </div>
+  <div class="stat-card high">
+    <div class="stat-label">High Risk</div>
+    <div class="stat-value">{{ stats.high }}</div>
+    <div class="stat-sub">On Hold</div>
+  </div>
+  <div class="stat-card medium">
+    <div class="stat-label">Medium Risk</div>
+    <div class="stat-value">{{ stats.medium }}</div>
+    <div class="stat-sub">Under Review</div>
+  </div>
+  <div class="stat-card safe">
+    <div class="stat-label">Low Risk</div>
+    <div class="stat-value">{{ stats.low }}</div>
+    <div class="stat-sub">Approved</div>
+  </div>
+  <div class="stat-card fraud">
+    <div class="stat-label">Fraud Detected</div>
+    <div class="stat-value">{{ stats.fraud }}</div>
+    <div class="stat-sub">ML Flagged</div>
+  </div>
+</div>
+
+<!-- Charts row -->
+<div class="charts-row">
+  <div class="chart-card">
+    <h3>Risk Level Distribution</h3>
+    <canvas id="riskChart" height="220"></canvas>
+  </div>
+  <div class="chart-card">
+    <h3>Fraud vs Legitimate</h3>
+    <canvas id="fraudChart" height="220"></canvas>
+  </div>
+</div>
+
+<!-- User stats bar -->
+<div class="user-stats-bar">
+  <div class="user-stat">
+    <span class="us-label">Logged in as</span>
+    <span class="us-value">{{ session.get('full_name','') }}</span>
+  </div>
+  <div class="user-stat">
+    <span class="us-label">Role</span>
+    <span class="badge badge-{{ 'critical' if session.get('role')=='admin' else 'low' }}">{{ session.get('role','analyst') }}</span>
+  </div>
+  <div class="user-stat">
+    <span class="us-label">You analysed</span>
+    <span class="us-value">{{ user_stats.get('analysed_count', 0) }} transactions</span>
+  </div>
+  <div class="user-stat">
+    <span class="us-label">Total logins</span>
+    <span class="us-value">{{ user_stats.get('login_count', 0) }}</span>
+  </div>
+  <div class="user-stat">
+    <span class="us-label">Last login</span>
+    <span class="us-value">{{ user_stats.get('last_login', 'N/A') }}</span>
+  </div>
+</div>
+
+<!-- Per-user transaction counts -->
+{% if txn_by_user %}
+<div class="table-card" style="margin-bottom:24px;">
+  <div class="table-header">
+    <h3>Transactions by Analyst</h3>
+  </div>
+  <table class="data-table" id="userTxnTable">
+    <thead>
+      <tr>
+        <th>Analyst</th>
+        <th>Total Analysed</th>
+        <th>Fraud Found</th>
+        <th>Critical</th>
+        <th>High</th>
+        <th>Avg Risk Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in txn_by_user %}
+      <tr>
+        <td><strong>{{ row.username }}</strong></td>
+        <td>{{ row.total }}</td>
+        <td><span class="badge badge-critical">{{ row.fraud_found or 0 }}</span></td>
+        <td>{{ row.critical or 0 }}</td>
+        <td>{{ row.high or 0 }}</td>
+        <td>{{ row.avg_score or 0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Recent transactions -->
+<div class="table-card">
+  <div class="table-header">
+    <h3>Recent Transactions</h3>
+    <a href="{{ url_for('transactions') }}" class="btn btn-sm">View All</a>
+  </div>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Transaction ID</th>
+        <th>Amount</th>
+        <th>Merchant</th>
+        <th>Location</th>
+        <th>Risk Score</th>
+        <th>Risk Level</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for txn in recent %}
+      <tr class="row-{{ txn.get('risk_level','LOW') | lower }}">
+        <td><a href="{{ url_for('transaction_detail', txn_id=txn.transaction_id) }}">{{ txn.transaction_id }}</a></td>
+        <td>₹{{ "%.2f" | format(txn.amount | float) }}</td>
+        <td>{{ txn.merchant }}</td>
+        <td>{{ txn.location }}</td>
+        <td>
+          <div class="risk-bar-wrap">
+            <div class="risk-bar" style="width:{{ txn.get('risk_score', 0) }}%;
+              background: {% if txn.get('risk_level') == 'CRITICAL' %}#dc3545
+              {% elif txn.get('risk_level') == 'HIGH' %}#fd7e14
+              {% elif txn.get('risk_level') == 'MEDIUM' %}#ffc107
+              {% else %}#28a745{% endif %}">
+            </div>
+            <span>{{ txn.get('risk_score', 0) }}</span>
+          </div>
+        </td>
+        <td><span class="badge badge-{{ txn.get('risk_level','LOW') | lower }}">{{ txn.get('risk_level','LOW') }}</span></td>
+        <td><span class="action-tag">{{ txn.get('recommended_action','APPROVE') }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const riskData = {
+    labels: ['Critical', 'High', 'Medium', 'Low'],
+    datasets:[{
+      data: [{{ stats.critical }}, {{ stats.high }}, {{ stats.medium }}, {{ stats.low }}],
+      backgroundColor: ['#dc3545','#fd7e14','#ffc107','#28a745'],
+      borderWidth: 2, borderColor: '#fff'
+    }]
+  };
+  new Chart(document.getElementById('riskChart'), {
+    type: 'doughnut', data: riskData,
+    options: { plugins: { legend: { position: 'bottom' } }, cutout: '60%' }
+  });
+
+  const fraudData = {
+    labels: ['Fraud', 'Legitimate'],
+    datasets:[{
+      data: [{{ stats.fraud }}, {{ stats.total - stats.fraud }}],
+      backgroundColor: ['#dc3545','#0d6efd'],
+      borderWidth: 2, borderColor: '#fff'
+    }]
+  };
+  new Chart(document.getElementById('fraudChart'), {
+    type: 'pie', data: fraudData,
+    options: { plugins: { legend: { position: 'bottom' } } }
+  });
+</script>
+{% endblock %}

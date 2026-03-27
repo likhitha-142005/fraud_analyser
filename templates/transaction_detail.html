@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ txn.transaction_id }} — Detail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <a href="{{ url_for('transactions') }}" class="btn btn-sm">Back</a>
+  <h2>Transaction Detail — {{ txn.transaction_id }}</h2>
+  <span class="badge badge-{{ risk.risk_level | lower }}">{{ risk.risk_level }}</span>
+</div>
+
+<div class="detail-grid">
+  <!-- Transaction Info -->
+  <div class="detail-card">
+    <h3>Transaction Info</h3>
+    <table class="info-table">
+      <tr><td>Transaction ID</td><td>{{ txn.transaction_id }}</td></tr>
+      <tr><td>User ID</td>       <td>{{ txn.user_id }}</td></tr>
+      <tr><td>Timestamp</td>     <td>{{ txn.timestamp }}</td></tr>
+      <tr><td>Amount</td>        <td>₹{{ "%.2f" | format(txn.amount | float) }}</td></tr>
+      <tr><td>Merchant</td>      <td>{{ txn.merchant }}</td></tr>
+      <tr><td>Location</td>      <td>{{ txn.location }}</td></tr>
+      <tr><td>Device</td>        <td>{{ txn.device }}</td></tr>
+      <tr><td>Payment Method</td><td>{{ txn.payment_method }}</td></tr>
+      <tr><td>Hour of Day</td>   <td>{{ txn.hour_of_day }}:00</td></tr>
+      <tr><td>Failed Attempts</td><td>{{ txn.failed_attempts }}</td></tr>
+      <tr><td>Txn Velocity</td>  <td>{{ txn.txn_velocity }} / hr</td></tr>
+    </table>
+  </div>
+
+  <!-- Risk Score -->
+  <div class="detail-card">
+    <h3>Risk Analysis</h3>
+    <div class="risk-score-display">
+      <div class="score-circle score-{{ risk.risk_level | lower }}">
+        <span class="score-number">{{ risk.risk_score }}</span>
+        <span class="score-label">/ 100</span>
+      </div>
+      <div class="score-info">
+        <div class="score-level badge badge-{{ risk.risk_level | lower }}">{{ risk.risk_level }}</div>
+        <div class="score-action">Action: <strong>{{ risk.recommended_action }}</strong></div>
+      </div>
+    </div>
+    <h4>Risk Factors Detected:</h4>
+    <ul class="risk-factors">
+      {% for factor in risk.risk_factors %}
+      <li>{{ factor }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <!-- Alert Preview -->
+  <div class="detail-card full-width">
+    <h3>Alert Generated</h3>
+    <div class="alert-preview">
+      <div class="alert-section">
+        <label>SMS Message:</label>
+        <div class="alert-box sms-box">{{ alert.sms_message }}</div>
+      </div>
+      <div class="alert-section">
+        <label>Email Subject:</label>
+        <div class="alert-box">{{ alert.email_subject }}</div>
+      </div>
+      <div class="alert-section">
+        <label>Email Body:</label>
+        <pre class="alert-box email-body">{{ alert.email_body }}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

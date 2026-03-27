@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Admin — Users{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>User Management</h2>
+  <span class="badge badge-critical">Admin Only</span>
+</div>
+
+<!-- Summary cards -->
+<div class="stats-grid" style="margin-bottom:24px;">
+  <div class="stat-card">
+    <div class="stat-label">Total Users</div>
+    <div class="stat-value">{{ users | length }}</div>
+  </div>
+  <div class="stat-card safe">
+    <div class="stat-label">Active Users</div>
+    <div class="stat-value">{{ users | selectattr('is_active') | list | length }}</div>
+  </div>
+  <div class="stat-card medium">
+    <div class="stat-label">Total Analysed</div>
+    <div class="stat-value">{{ txn_counts | sum(attribute='total') }}</div>
+  </div>
+  <div class="stat-card critical">
+    <div class="stat-label">Fraud Found</div>
+    <div class="stat-value">{{ txn_counts | sum(attribute='fraud_found') }}</div>
+  </div>
+</div>
+
+<!-- Users table -->
+<div class="table-card" style="margin-bottom:24px;">
+  <div class="table-header">
+    <h3>Registered Users</h3>
+  </div>
+  <table id="usersTable" class="display data-table" style="width:100%">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Full Name</th>
+        <th>Username</th>
+        <th>Email</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Txns Analysed</th>
+        <th>Login Count</th>
+        <th>Last Login</th>
+        <th>Registered On</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u.id }}</td>
+        <td><strong>{{ u.full_name }}</strong></td>
+        <td>{{ u.username }}</td>
+        <td>{{ u.email }}</td>
+        <td>
+          <span class="badge {{ 'badge-critical' if u.role=='admin' else 'badge-medium' if u.role=='analyst' else 'badge-low' }}">
+            {{ u.role }}
+          </span>
+        </td>
+        <td>
+          {% if u.is_active %}
+            <span class="badge badge-low">Active</span>
+          {% else %}
+            <span class="badge badge-critical">Inactive</span>
+          {% endif %}
+        </td>
+        <td><strong>{{ u.txn_count or 0 }}</strong></td>
+        <td>{{ u.login_count or 0 }}</td>
+        <td>{{ u.last_login or 'Never' }}</td>
+        <td>{{ u.created_at }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Transaction count by analyst -->
+{% if txn_counts %}
+<div class="table-card" style="margin-bottom:24px;">
+  <div class="table-header">
+    <h3>Transactions by Analyst</h3>
+  </div>
+  <table id="txnTable" class="display data-table" style="width:100%">
+    <thead>
+      <tr>
+        <th>Analyst</th>
+        <th>Total Analysed</th>
+        <th>Fraud Found</th>
+        <th>Critical</th>
+        <th>High</th>
+        <th>Avg Risk Score</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in txn_counts %}
+      <tr>
+        <td><strong>{{ row.username }}</strong></td>
+        <td>{{ row.total }}</td>
+        <td><span class="badge badge-critical">{{ row.fraud_found or 0 }}</span></td>
+        <td>{{ row.critical or 0 }}</td>
+        <td>{{ row.high or 0 }}</td>
+        <td>{{ row.avg_score or 0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Login logs -->
+<div class="table-card">
+  <div class="table-header">
+    <h3>Recent Login Activity</h3>
+  </div>
+  <table id="logsTable" class="display data-table" style="width:100%">
+    <thead>
+      <tr>
+        <th>Username</th>
+        <th>Login Time</th>
+        <th>IP Address</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for log in login_logs %}
+      <tr>
+        <td>{{ log.username }}</td>
+        <td>{{ log.login_time }}</td>
+        <td>{{ log.ip_address }}</td>
+        <td>
+          {% if log.status == 'success' %}
+            <span class="badge badge-low">Success</span>
+          {% else %}
+            <span class="badge badge-critical">Failed</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt@2/css/dataTables.dataTables.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net@2/js/dataTables.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  new DataTable('#usersTable', { pageLength: 10, order: [[0,'asc']] });
+  new DataTable('#logsTable',  { pageLength: 10, order: [[1,'desc']] });
+  {% if txn_counts %}
+  new DataTable('#txnTable',   { pageLength: 10, order: [[1,'desc']] });
+  {% endif %}
+});
+</script>
+<style>
+.dataTables_wrapper { font-size:13px; }
+.dataTables_filter input  { border:1px solid #ddd; border-radius:8px; padding:6px 10px; margin-left:6px; }
+.dataTables_length select { border:1px solid #ddd; border-radius:6px; padding:4px 8px; }
+</style>
+{% endblock %}

@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Transactions — Fraud Analyser{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h2>All Transactions</h2>
+  <span class="page-info">Showing {{ transactions|length }} of {{ total }} records</span>
+</div>
+
+<div class="filter-bar">
+  <input type="text" id="searchInput" placeholder="Search by ID, merchant, location..." class="search-input" onkeyup="filterTable()"/>
+  <select id="riskFilter" onchange="filterTable()" class="filter-select">
+    <option value="">All Risk Levels</option>
+    <option value="CRITICAL">Critical</option>
+    <option value="HIGH">High</option>
+    <option value="MEDIUM">Medium</option>
+    <option value="LOW">Low</option>
+  </select>
+</div>
+
+<div class="table-card">
+  <table class="data-table" id="txnTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Timestamp</th>
+        <th>User</th>
+        <th>Amount</th>
+        <th>Merchant</th>
+        <th>Location</th>
+        <th>Device</th>
+        <th>Risk Score</th>
+        <th>Level</th>
+        <th>Fraud</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="txnBody">
+      {% for txn in transactions %}
+      <tr class="row-{{ txn.get('risk_level','LOW') | lower }}" data-risk="{{ txn.get('risk_level','LOW') }}">
+        <td><a href="{{ url_for('transaction_detail', txn_id=txn.transaction_id) }}">{{ txn.transaction_id }}</a></td>
+        <td>{{ txn.timestamp }}</td>
+        <td>{{ txn.user_id }}</td>
+        <td>₹{{ "%.2f" | format(txn.amount | float) }}</td>
+        <td>{{ txn.merchant }}</td>
+        <td>{{ txn.location }}</td>
+        <td>{{ txn.device }}</td>
+        <td>
+          <div class="risk-bar-wrap">
+            <div class="risk-bar" style="width:{{ txn.get('risk_score',0) }}%;
+              background: {% if txn.get('risk_level')=='CRITICAL' %}#dc3545
+              {% elif txn.get('risk_level')=='HIGH' %}#fd7e14
+              {% elif txn.get('risk_level')=='MEDIUM' %}#ffc107
+              {% else %}#28a745{% endif %}">
+            </div>
+            <span>{{ txn.get('risk_score',0) }}</span>
+          </div>
+        </td>
+        <td><span class="badge badge-{{ txn.get('risk_level','LOW') | lower }}">{{ txn.get('risk_level','LOW') }}</span></td>
+        <td>
+          {% if txn.is_fraud == 1 %}
+            <span class="badge badge-critical">Yes</span>
+          {% else %}
+            <span class="badge badge-low">No</span>
+          {% endif %}
+        </td>
+        <td><span class="action-tag">{{ txn.get('recommended_action','APPROVE') }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Pagination -->
+<div class="pagination">
+  {% if page > 1 %}
+    <a href="{{ url_for('transactions', page=page-1) }}" class="btn btn-sm">Prev</a>
+  {% endif %}
+  <span>Page {{ page }} of {{ total_pages }}</span>
+  {% if page < total_pages %}
+    <a href="{{ url_for('transactions', page=page+1) }}" class="btn btn-sm">Next</a>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/datatables.net-dt@2/css/dataTables.dataTables.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net@2/js/dataTables.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  new DataTable('#txnTable', {
+    pageLength: 20,
+    order: [[0,'desc']],
+    language: { search: "Search transactions:" },
+    columnDefs: [{ orderable: false, targets: [8,9,10] }]
+  });
+});
+</script>
+<style>
+.dataTables_wrapper { font-size:13px; }
+.dataTables_filter input { border:1px solid #ddd; border-radius:8px; padding:6px 10px; margin-left:6px; }
+.dataTables_length select { border:1px solid #ddd; border-radius:6px; padding:4px 8px; }
+</style>
+{% endblock %}
